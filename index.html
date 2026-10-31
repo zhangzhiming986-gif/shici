@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f4ed">
+  <meta name="description" content="拾词：自己的四六级单词本，今天学习，明天复盘。">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="拾词">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <title>拾词 · 每天一点，记得更久</title>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar"><a href="#today" class="brand" aria-label="拾词首页"><span class="brand-mark">拾</span><span>拾词<small>YOUR DAILY WORDS</small></span></a><button class="icon-button" id="install-button" aria-label="添加到手机主屏幕">↗</button></header>
+    <div id="storage-error" class="error-banner" role="alert" hidden></div>
+    <main id="main"></main>
+    <nav class="bottom-nav" aria-label="主导航">
+      <button data-tab="today" class="active"><span aria-hidden="true">◉</span>今日</button>
+      <button data-tab="library"><span aria-hidden="true">▤</span>词库</button>
+      <button data-tab="plan"><span aria-hidden="true">▦</span>计划</button>
+    </nav>
+  </div>
+  <dialog id="editor" aria-labelledby="editor-title">
+    <form id="word-form">
+      <div class="dialog-heading"><h2 id="editor-title">录入一个新词</h2><button type="button" class="icon-button" data-close aria-label="关闭">×</button></div>
+      <p class="muted">把想记住的，留在这里。</p>
+      <label>英文单词 <input name="spelling" maxlength="120" placeholder="例如：persist" required autocapitalize="none" autocomplete="off" spellcheck="false"></label>
+      <label>中文释义 <textarea name="meaning" maxlength="2000" placeholder="例如：v. 坚持；持续" required rows="2"></textarea></label>
+      <label>所属词库 <select name="level"><option value="4">CET-4 · 四级</option><option value="6">CET-6 · 六级</option></select></label>
+      <label>例句 / 笔记 <span class="optional">选填</span><textarea name="example" maxlength="4000" rows="2" placeholder="在语境里，记得更牢。"></textarea></label>
+      <p class="form-note">录入后，在“今日”确认学过，明天开始复习。</p>
+      <p class="form-error" role="alert"></p>
+      <button class="button primary full" type="submit">保存单词</button>
+    </form>
+  </dialog>
+  <dialog id="review" aria-labelledby="review-title">
+    <div class="dialog-heading"><h2 id="review-title">今日复盘</h2><button class="icon-button" data-close aria-label="结束本次学习">×</button></div>
+    <div id="review-content"></div>
+  </dialog>
+  <dialog id="help" aria-labelledby="help-title">
+    <div class="dialog-heading"><h2 id="help-title">把拾词放进口袋</h2><button class="icon-button" data-close aria-label="关闭">×</button></div>
+    <div class="install-mark">拾</div>
+    <p>在 iPhone 的 <strong>Safari</strong> 打开此网址：</p>
+    <ol class="steps"><li>点击浏览器的<strong>分享</strong>按钮。</li><li>选择<strong>添加到主屏幕</strong>。</li><li>如有“作为网页 App 打开”，保持开启，再点<strong>添加</strong>。</li></ol>
+    <p class="note">无需登录，打开就能使用。单词和进度保存在你的设备中。请固定使用同一个入口；浏览器与桌面入口的数据可能独立，迁移时用备份恢复。</p>
+    <button class="button primary full" data-close>知道了</button>
+  </dialog>
+  <dialog id="confirm" aria-labelledby="confirm-title">
+    <h2 id="confirm-title"></h2><p id="confirm-message"></p>
+    <div class="button-row"><button class="button secondary" data-close>取消</button><button class="button danger" id="confirm-yes">确认</button></div>
+  </dialog>
+  <input type="file" id="restore-file" accept="application/json,.json" hidden>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
