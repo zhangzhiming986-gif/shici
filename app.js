@@ -1,4 +1,4 @@
-import {dayKey, addDays, milestones, shuffle, assignBatch, dailyProgress, isDue, freshLibrary, createWord, learnWord, reviewWord, validateLibrary} from './core.js';
+import {dayKey, addDays, milestones, shuffle, assignBatch, completedToday, dailyProgress, isDue, freshLibrary, createWord, learnWord, reviewWord, validateLibrary} from './core.js';
 
 const $ = s => document.querySelector(s);
 const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -44,7 +44,7 @@ function toast(message) {
 const dueWords = () => library.words.filter(w => isDue(w)).sort((a,b) => a.due.localeCompare(b.due));
 const newWords = () => library.words.filter(w => w.learned === null);
 const formatDay = day => `${Number(day.slice(5,7))}月${Number(day.slice(8,10))}日`;
-const countReviewed = () => new Set(library.events.filter(e => e.day === dayKey() && e.remembered).map(e => e.wordID)).size;
+const countReviewed = () => completedToday(library).length;
 function render() {
   document.querySelectorAll('[data-tab]').forEach(el => {
     el.classList.toggle('active', el.dataset.tab === tab);
@@ -67,13 +67,18 @@ function todayPage() {
       <p class="hero-foot">${overdue ? `含 ${overdue} 个逾期单词，今天一起复盘` : due.length ? '先回想，再翻开答案，不着急。' : library.words.some(w=>w.due) ? '今天没有到期单词，下一次复盘已安排。' : '今天学过，明天会在这里遇见。'}</p>
       <button class="button lime full" data-action="${due.length ? 'review' : !progress.remaining ? 'plan' : fresh.length ? 'learn' : 'add'}">${due.length ? '开始今日复习' : !progress.remaining ? '新词目标已完成 · 查看计划' : fresh.length ? '开始学习新词' : '录入我的单词'}<span class="arrow">→</span></button>
     </section>
-    <div class="stats"><div class="stat"><strong>${countReviewed()}</strong><span>今日已复习</span></div><div class="stat"><strong>${fresh.length}</strong><span>待学新词</span></div><div class="stat"><strong>${library.words.filter(w=>w.stage===6).length}</strong><span>本轮已完成</span></div></div>
+    <div class="stats"><div class="stat"><strong>${countReviewed()}</strong><span>今天已背过</span></div><div class="stat"><strong>${fresh.length}</strong><span>待学新词</span></div><div class="stat"><strong>${library.words.filter(w=>w.stage===6).length}</strong><span>本轮已完成</span></div></div>
+    ${completedTodaySection()}
     <section class="daily-card" aria-label="每日新词目标"><div class="section-head"><h2>今日已选新词 <span class="daily-count">${progress.learned} / ${progress.goal}</span></h2><button class="text-button" data-action="plan">调整数量 →</button></div><progress value="${Math.min(progress.learned,progress.goal)}" max="${progress.goal}" aria-label="今日新词分组进度"></progress><p class="footnote">${!progress.remaining ? '今日新词已分组，未通过的词仍需在今日复盘中完成。想多学一点，可以调高目标。' : `还需学习 ${progress.remaining} 个新词${fresh.length < progress.remaining ? `，词库还有 ${fresh.length} 个待学，可继续录入。` : '，每学完一个都会保存进度。'}`}</p></section>
     <div class="learn-card"><div class="learn-icon">＋</div><div class="learn-copy"><strong>${!progress.remaining ? '今天的新词，已选定' : '给词库添一点新鲜感'}</strong><p>${!progress.remaining ? '未通过的词请在今日复盘中继续' : fresh.length ? `本次学习 ${progress.nextCount} 个 · 词库待学 ${fresh.length} 个` : '自己录入，建立专属四六级单词本'}</p></div><button class="button secondary" data-action="${!progress.remaining ? 'plan' : fresh.length ? 'learn' : 'add'}">${!progress.remaining ? '调整' : fresh.length ? '去学习' : '录入'}</button></div>
     <div class="section-head"><h2>未来 7 天</h2><span>当前已安排的任务</span></div>
     <div class="week">${Array.from({length:7},(_,i)=>{const d=addDays(today,i); const count=library.words.filter(w=>i===0 ? isDue(w,today) : w.due===d).length;return `<div class="day"><span>${i===0?'今天':['日','一','二','三','四','五','六'][new Date(d+'T12:00:00').getDay()]}</span><strong>${Number(d.slice(-2))}</strong><small>${count ? count+' 词' : '—'}</small></div>`;}).join('')}</div>
     <p class="footnote">复习会随每次回答更新。没背过的词当天继续复盘，通过后才安排下次复习。</p>
     <button class="install-banner" data-action="install"><span>↗ &nbsp; 添加到 iPhone 主屏幕，随时拾起一个词</span><span>→</span></button>`;
+}
+function completedTodaySection() {
+  const words = completedToday(library);
+  return `<section class="plan-card" aria-label="今天背过的单词"><details><summary style="cursor:pointer;padding:8px 0;font-weight:700">今天背过的单词 · ${words.length} 个 <span class="muted">（点击展开）</span></summary><p class="footnote">今天点过“背过了”的新词和复习词，每个词只列一次，最近完成的排在前面。查看不会改变复习计划。</p>${words.length ? `<div style="max-height:420px;overflow-y:auto">${words.map(w=>`<article class="word-row"><div class="word-info"><h3>${esc(w.spelling)}</h3><p>${esc(w.meaning)}</p>${w.example?`<p class="example">${esc(w.example)}</p>`:''}<div class="word-meta">CET-${w.level} · ${w.due?`${formatDay(w.due)}复习`:'本轮已完成 ✓'}</div></div></article>`).join('')}</div>` : '<p class="muted">今天还没有背过的单词。学习或复盘时点“背过了”，就会出现在这里。</p>'}</details></section>`;
 }
 function libraryPage() {
   return `<div class="page-heading"><div><div class="eyebrow">YOUR WORD COLLECTION</div><h1>我的词库 <span class="muted">${library.words.length}</span></h1></div><button class="button primary" data-action="add">＋ 录入</button></div>

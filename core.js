@@ -24,6 +24,15 @@ export function nextDue(day, stage) {
 }
 export const isDue = (word, today = dayKey()) => word.learned !== null && word.due !== null && word.due <= today;
 export const freshLibrary = () => ({version: 1, revision: 0, dailyGoal: 20, words: [], events: []});
+export function completedToday(library, today = dayKey()) {
+  const words = new Map(library.words.map(w => [w.id, w]));
+  const seen = new Set();
+  return library.events.slice().reverse().filter(e => {
+    if (e.day !== today || !e.remembered || seen.has(e.wordID) || !words.has(e.wordID)) return false;
+    seen.add(e.wordID);
+    return true;
+  }).map(e => words.get(e.wordID));
+}
 export function dailyProgress(library, today = dayKey()) {
   const goal = library.dailyGoal ?? 20;
   const learned = library.words.filter(w => w.learned === today).length;
