@@ -1,4 +1,4 @@
-import {dayKey, addDays, milestones, dailyProgress, isDue, freshLibrary, createWord, learnWord, reviewWord, validateLibrary} from './core.js';
+import {dayKey, addDays, milestones, shuffle, assignBatch, dailyProgress, isDue, freshLibrary, createWord, learnWord, reviewWord, validateLibrary} from './core.js';
 
 const $ = s => document.querySelector(s);
 const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -44,7 +44,7 @@ function toast(message) {
 const dueWords = () => library.words.filter(w => isDue(w)).sort((a,b) => a.due.localeCompare(b.due));
 const newWords = () => library.words.filter(w => w.learned === null);
 const formatDay = day => `${Number(day.slice(5,7))}月${Number(day.slice(8,10))}日`;
-const countReviewed = () => new Set(library.events.filter(e => e.day === dayKey()).map(e => e.wordID)).size;
+const countReviewed = () => new Set(library.events.filter(e => e.day === dayKey() && e.remembered).map(e => e.wordID)).size;
 function render() {
   document.querySelectorAll('[data-tab]').forEach(el => {
     el.classList.toggle('active', el.dataset.tab === tab);
@@ -68,11 +68,11 @@ function todayPage() {
       <button class="button lime full" data-action="${due.length ? 'review' : !progress.remaining ? 'plan' : fresh.length ? 'learn' : 'add'}">${due.length ? '开始今日复习' : !progress.remaining ? '新词目标已完成 · 查看计划' : fresh.length ? '开始学习新词' : '录入我的单词'}<span class="arrow">→</span></button>
     </section>
     <div class="stats"><div class="stat"><strong>${countReviewed()}</strong><span>今日已复习</span></div><div class="stat"><strong>${fresh.length}</strong><span>待学新词</span></div><div class="stat"><strong>${library.words.filter(w=>w.stage===6).length}</strong><span>本轮已完成</span></div></div>
-    <section class="daily-card" aria-label="每日新词目标"><div class="section-head"><h2>今日新词 <span class="daily-count">${progress.learned} / ${progress.goal}</span></h2><button class="text-button" data-action="plan">调整数量 →</button></div><progress value="${Math.min(progress.learned,progress.goal)}" max="${progress.goal}" aria-label="今日新词完成进度"></progress><p class="footnote">${!progress.remaining ? '今日新词目标已完成，明天继续。想多学一点，可以调高目标。' : `还需学习 ${progress.remaining} 个新词${fresh.length < progress.remaining ? `，词库还有 ${fresh.length} 个待学，可继续录入。` : '，每学完一个都会保存进度。'}`}</p></section>
-    <div class="learn-card"><div class="learn-icon">＋</div><div class="learn-copy"><strong>${!progress.remaining ? '今天的积累，已完成' : '给词库添一点新鲜感'}</strong><p>${!progress.remaining ? '到期复习仍按计划进行' : fresh.length ? `本次学习 ${progress.nextCount} 个 · 词库待学 ${fresh.length} 个` : '自己录入，建立专属四六级单词本'}</p></div><button class="button secondary" data-action="${!progress.remaining ? 'plan' : fresh.length ? 'learn' : 'add'}">${!progress.remaining ? '调整' : fresh.length ? '去学习' : '录入'}</button></div>
+    <section class="daily-card" aria-label="每日新词目标"><div class="section-head"><h2>今日已选新词 <span class="daily-count">${progress.learned} / ${progress.goal}</span></h2><button class="text-button" data-action="plan">调整数量 →</button></div><progress value="${Math.min(progress.learned,progress.goal)}" max="${progress.goal}" aria-label="今日新词分组进度"></progress><p class="footnote">${!progress.remaining ? '今日新词已分组，未通过的词仍需在今日复盘中完成。想多学一点，可以调高目标。' : `还需学习 ${progress.remaining} 个新词${fresh.length < progress.remaining ? `，词库还有 ${fresh.length} 个待学，可继续录入。` : '，每学完一个都会保存进度。'}`}</p></section>
+    <div class="learn-card"><div class="learn-icon">＋</div><div class="learn-copy"><strong>${!progress.remaining ? '今天的新词，已选定' : '给词库添一点新鲜感'}</strong><p>${!progress.remaining ? '未通过的词请在今日复盘中继续' : fresh.length ? `本次学习 ${progress.nextCount} 个 · 词库待学 ${fresh.length} 个` : '自己录入，建立专属四六级单词本'}</p></div><button class="button secondary" data-action="${!progress.remaining ? 'plan' : fresh.length ? 'learn' : 'add'}">${!progress.remaining ? '调整' : fresh.length ? '去学习' : '录入'}</button></div>
     <div class="section-head"><h2>未来 7 天</h2><span>当前已安排的任务</span></div>
     <div class="week">${Array.from({length:7},(_,i)=>{const d=addDays(today,i); const count=library.words.filter(w=>i===0 ? isDue(w,today) : w.due===d).length;return `<div class="day"><span>${i===0?'今天':['日','一','二','三','四','五','六'][new Date(d+'T12:00:00').getDay()]}</span><strong>${Number(d.slice(-2))}</strong><small>${count ? count+' 词' : '—'}</small></div>`;}).join('')}</div>
-    <p class="footnote">复习会随每次回答更新。忘记也没关系，明天再见一面。</p>
+    <p class="footnote">复习会随每次回答更新。没背过的词当天继续复盘，通过后才安排下次复习。</p>
     <button class="install-banner" data-action="install"><span>↗ &nbsp; 添加到 iPhone 主屏幕，随时拾起一个词</span><span>→</span></button>`;
 }
 function libraryPage() {
@@ -87,8 +87,8 @@ function wordRows() {
 }
 function planPage() {
   return `<div class="page-heading"><div><div class="eyebrow">SMALL STEPS, LASTING MEMORY</div><h1>让记忆，有迹可循。</h1></div></div>
-    <section class="plan-card"><h2>每天背多少个新词？</h2><p>选择适合你的数量，今天就开始生效。已学过的会计入今日目标，到期复习不受新词数量限制。</p><div class="goal-options" aria-label="常用每日数量">${[5,10,20,30,50,100].map(n=>`<button class="chip ${library.dailyGoal===n?'active':''}" data-goal="${n}" aria-pressed="${library.dailyGoal===n}">${n} 个</button>`).join('')}</div><form id="goal-form"><label for="daily-goal">自定义每日新词数量（1–500）</label><div class="goal-input-row"><input id="daily-goal" name="dailyGoal" type="number" min="1" max="500" step="1" inputmode="numeric" required value="${library.dailyGoal}"><button type="submit" class="button primary">保存目标</button></div><p class="form-error" role="alert"></p></form><p class="footnote">当前目标：每天 ${library.dailyGoal} 个；今天已学 ${dailyProgress(library).learned} 个。设置会保存在本机，并包含在备份中。</p></section>
-    <section class="plan-card"><div class="eyebrow">SPACED REPETITION</div><h2 style="margin-top:8px">你的 6 轮复习计划</h2><div class="milestones">${milestones.map(d=>`<span><b>${d}</b>第 ${d} 天</span>`).join('')}</div><p>以确认学过当天为第 0 天，第二天进行首次复盘。按时记住时，依次在以上日期复习。</p><ul><li>记住了：进入下一阶段。</li><li>忘记了：明天再复习，重新开始本轮。</li><li>逾期了：任务不会消失，复习后顺延下一阶段。</li></ul><p class="note">这是参考遗忘规律的固定间隔复习方案，并非适用于所有人的精确曲线。完成 6 轮不代表永久记住。</p></section>
+    <section class="plan-card"><h2>每天背多少个新词？</h2><p>选择适合你的数量，今天就开始生效。开始学习时选定当天一组，未背过的保留在今日复盘中；已选单词计入今日目标，到期复习不受新词数量限制。</p><div class="goal-options" aria-label="常用每日数量">${[5,10,20,30,50,100].map(n=>`<button class="chip ${library.dailyGoal===n?'active':''}" data-goal="${n}" aria-pressed="${library.dailyGoal===n}">${n} 个</button>`).join('')}</div><form id="goal-form"><label for="daily-goal">自定义每日新词数量（1–500）</label><div class="goal-input-row"><input id="daily-goal" name="dailyGoal" type="number" min="1" max="500" step="1" inputmode="numeric" required value="${library.dailyGoal}"><button type="submit" class="button primary">保存目标</button></div><p class="form-error" role="alert"></p></form><p class="footnote">当前目标：每天 ${library.dailyGoal} 个；今天已选 ${dailyProgress(library).learned} 个。设置会保存在本机，并包含在备份中。</p></section>
+    <section class="plan-card"><div class="eyebrow">SPACED REPETITION</div><h2 style="margin-top:8px">你的 6 轮复习计划</h2><div class="milestones">${milestones.map(d=>`<span><b>${d+1}</b>第 ${d+1} 天</span>`).join('')}</div><p>以每组首次学习当天为第 1 天；第 2、4、7、15、30、60 天复盘。每组独立计算，顺序随机；每天的新词数量不限制到期复习数量。</p><ul><li>背过了：当天通过，按本组首次学习日期安排下一轮。</li><li>没背过：当天继续随机复盘，直到选择“背过了”。</li><li>逾期了：保留补背；通过后安排本组下一个未来日期，不在同一天补做多个历史轮次。</li></ul><p class="note">这是参考遗忘规律的固定间隔复习方案，并非适用于所有人的精确曲线。完成 6 轮不代表永久记住。</p></section>
     <section class="plan-card"><h2>安心保存你的积累</h2><p>单词和进度只保存在当前设备、当前浏览器中，不会自动同步。清理网站数据可能丢失记录，请定期备份。</p><div class="settings-row"><div><strong>导出备份</strong><small>单词、学习进度和复习记录</small></div><button class="button secondary" data-action="export">导出</button></div><div class="settings-row"><div><strong>恢复备份</strong><small>用 JSON 备份替换当前数据</small></div><button class="button secondary" data-action="import">恢复</button></div></section>
     <section class="plan-card"><h2>把复盘变成一个小习惯</h2><p>这一版打开时会自动列出到期单词，暂不发送后台通知。建议在 iPhone“提醒事项”中设置每天固定时间提醒：“打开拾词，复习今天的单词”。</p><button class="text-button" data-action="install">查看添加到主屏幕的方法 ↗</button></section>
     <p class="footnote" style="text-align:center">拾词 · CET 4 / 6<br>今天学一点，明天再见面。</p>`;
@@ -112,10 +112,12 @@ function confirmAction(title, message, label, action) {
 }
 function startSession(learning) {
   const remaining = dailyProgress(library).remaining;
-  if (learning && remaining === 0) { toast('今日新词目标已完成，可在“计划”调高数量'); return; }
-  const words = learning ? newWords().slice(0,remaining) : dueWords();
+  if (learning && remaining === 0) { toast('今日新词已分组，可在“计划”调高数量'); return; }
+  if (learning) transaction(next => assignBatch(next));
+  const words = shuffle(learning ? library.words.filter(w => w.learned === dayKey() && isDue(w)) : dueWords());
+  render();
   if (!words.length) { toast(learning ? '先录入一个新词吧' : '今天没有待复习单词'); return; }
-  session = {ids:words.map(w=>w.id),position:0,revealed:learning,learning};
+  session = {ids:words.map(w=>w.id),position:0,revealed:false,learning,day:dayKey()};
   $('#review-title').textContent = learning ? '学习新词' : '今日复盘';
   renderReview(); $('#review').showModal();
 }
@@ -127,19 +129,25 @@ function renderReview() {
     $('#review-content').innerHTML = `<div class="flashcard"><div class="done-icon">✓</div><h3 style="font-family:inherit;font-size:25px">这一组完成了</h3><p class="muted">${learning ? '学习进度已保存，明天记得回来复盘。' : '每一次回想，都让记忆更清晰。'}</p></div><button class="button primary full" data-close>回到今日</button>`;
     return;
   }
-  $('#review-content').innerHTML = `<div class="progress"><span style="width:${position/ids.length*100}%"></span></div><div class="review-meta"><span>${learning?'认识它，再确认学过':'先回想，再看答案'}</span><span>${position+1} / ${ids.length}</span></div><div class="flashcard"><span class="level">CET-${word.level}</span><h3>${esc(word.spelling)}</h3>${revealed ? `<div class="meaning">${esc(word.meaning)}</div>${word.example?`<p class="example">${esc(word.example)}</p>`:''}` : '<p class="prompt">这个词的意思，你还记得吗？</p>'}</div>${learning ? '<button class="button primary full" data-answer="learn">学过了，明天复习 →</button><p class="footnote">确认之后，从明天开始安排 6 轮复习。</p>' : revealed ? '<div class="button-row"><button class="button secondary" data-answer="forgot">忘记了</button><button class="button primary" data-answer="remembered">记住了 ✓</button></div><p class="footnote">忘记了：明天再复习，重新开始本轮计划。</p>' : '<button class="button primary full" data-answer="reveal">翻开答案</button>'}`;
+  $('#review-content').innerHTML = `<div class="progress"><span style="width:${position/ids.length*100}%"></span></div><div class="review-meta"><span>${learning?'本组新词 · 先回想再看答案':'今日复盘 · 随机顺序'}</span><span>${position+1} / ${ids.length}</span></div><div class="flashcard"><span class="level">CET-${word.level}</span><h3>${esc(word.spelling)}</h3>${revealed ? `<div class="meaning">${esc(word.meaning)}</div>${word.example?`<p class="example">${esc(word.example)}</p>`:''}` : '<p class="prompt">这个词的意思，你还记得吗？</p>'}</div>${revealed ? '<div class="button-row"><button class="button secondary" data-answer="forgot">没背过 · 今天再背</button><button class="button primary" data-answer="remembered">背过了 ✓</button></div><p class="footnote">没背过的留在本轮随机复盘；背过的今天不再出现。</p>' : '<button class="button primary full" data-answer="reveal">翻开答案</button>'}`;
 }
 function answer(kind) {
+  if (!session || session.day !== dayKey()) { $('#review').close(); session=null; render(); toast('日期已变化，请重新开始今日复盘'); return; }
   if (kind === 'reveal') { session.revealed = true; renderReview(); return; }
   const id = session.ids[session.position], today = dayKey();
   transaction(next => {
-    if (kind === 'learn' && dailyProgress(next,today).remaining === 0) throw Error('今日新词目标已完成');
     const index = next.words.findIndex(w=>w.id===id);
     if (index < 0) throw Error('该单词已删除，请重新开始');
-    next.words[index] = kind === 'learn' ? learnWord(next.words[index], today) : reviewWord(next.words[index], kind==='remembered', today);
-    if (kind !== 'learn') next.events.push({wordID:id,day:today,remembered:kind==='remembered'});
+    next.words[index] = reviewWord(next.words[index], kind==='remembered', today);
+    next.events.push({wordID:id,day:today,remembered:kind==='remembered'});
   });
-  session.position++; session.revealed = session.learning; renderReview(); render();
+  if (kind === 'forgot') {
+    const rest = shuffle(session.ids.slice(session.position + 1));
+    const at = rest.length ? 1 + Math.floor(Math.random() * rest.length) : 0;
+    rest.splice(at, 0, id);
+    session.ids = [...session.ids.slice(0, session.position + 1), ...rest];
+  }
+  session.position++; session.revealed = false; renderReview(); render();
 }
 function exportBackup() {
   const data = readOnly && rawLoaded ? rawLoaded : JSON.stringify(library,null,2);

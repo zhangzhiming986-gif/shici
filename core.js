@@ -1,4 +1,16 @@
-export const milestones = [1, 2, 4, 7, 15, 30];
+export const milestones = [1, 3, 6, 14, 29, 59];
+export function shuffle(items, random = Math.random) {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+export function assignBatch(library, today = dayKey()) {
+  const ids = new Set(shuffle(library.words.filter(w => w.learned === null)).slice(0, dailyProgress(library, today).remaining).map(w => w.id));
+  library.words = library.words.map(w => ids.has(w.id) ? {...w, learned: today, due: today, initialPending: true, scheduleVersion: 2} : w);
+}
 export function dayKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
@@ -25,12 +37,15 @@ export function createWord({spelling, meaning, example = '', level = '4'}, id = 
 }
 export function learnWord(word, today = dayKey()) {
   if (word.learned !== null) throw Error('这个单词已经开始学习');
-  return {...word, learned: today, due: nextDue(today, 0)};
+  return {...word, learned: today, due: nextDue(today, 0), scheduleVersion: 2, initialPending: false};
 }
 export function reviewWord(word, remembered, today = dayKey()) {
   if (!isDue(word, today)) throw Error('这个单词尚未到复习时间');
-  const stage = remembered ? word.stage + 1 : 0;
-  return {...word, stage, due: nextDue(today, stage), lapses: word.lapses + (remembered ? 0 : 1)};
+  if (!remembered) return {...word, due: today, lapses: word.lapses + 1};
+  let stage = word.initialPending ? 0 : word.stage + 1;
+  while (stage < 6 && addDays(word.learned, milestones[stage]) <= today) stage++;
+  return {...word, stage, initialPending: false, scheduleVersion: 2,
+    due: stage === 6 ? null : addDays(word.learned, milestones[stage])};
 }
 function validDay(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -42,6 +57,7 @@ export function validateLibrary(value) {
   if (!Number.isInteger(dailyGoal) || dailyGoal < 1 || dailyGoal > 500) throw Error('每日新词数量需为 1–500 的整数');
   const ids = new Set(), keys = new Set();
   for (const w of value.words) {
+    if (w && ((w.initialPending !== undefined && typeof w.initialPending !== 'boolean') || (w.scheduleVersion !== undefined && w.scheduleVersion !== 2))) throw Error('复习方案无效');
     if (!w || typeof w.id !== 'string' || !w.id || ids.has(w.id) ||
         !['4', '6'].includes(w.level) || typeof w.spelling !== 'string' || !w.spelling.trim() || w.spelling.length > 120 ||
         typeof w.meaning !== 'string' || !w.meaning.trim() || w.meaning.length > 2000 || typeof w.example !== 'string' || w.example.length > 4000 ||
@@ -57,5 +73,6 @@ export function validateLibrary(value) {
   for (const e of value.events) {
     if (!e || !ids.has(e.wordID) || !validDay(e.day) || typeof e.remembered !== 'boolean') throw Error('复习记录无效');
   }
-  return {version: 1, revision: Number.isSafeInteger(value.revision) ? value.revision : 0, dailyGoal, words: value.words, events: value.events};
+  const words = value.words.map(w => w.learned !== null && w.scheduleVersion !== 2 ? {...w, scheduleVersion: 2, initialPending: false, due: w.stage === 6 ? null : addDays(w.learned, milestones[w.stage])} : w);
+  return {version: 1, revision: Number.isSafeInteger(value.revision) ? value.revision : 0, dailyGoal, words, events: value.events};
 }
